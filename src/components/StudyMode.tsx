@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Check, X, Volume2, ArrowRight, Trophy, Target, Zap } from 'lucide-react';
+import { Check, X, Volume2, ArrowRight, Trophy, Target } from 'lucide-react';
 import { Word } from '../types';
 
 interface StudyModeProps {
