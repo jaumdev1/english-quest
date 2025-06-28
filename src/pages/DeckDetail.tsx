@@ -1,31 +1,72 @@
 import { useState, useEffect } from 'react';
-import { Plus, BookOpen, Search, Filter } from 'lucide-react';
-import { AddWordModal } from './components/AddWordModal';
-import { WordCard } from './components/WordCard';
-import { StudyMode } from './components/StudyMode';
-import { Notification } from './components/Notification';
-import { useWordsAPI } from './hooks/useWordsAPI';
-import { Word, WordFormData } from './types';
-import './App.css';
+import { useParams, useNavigate } from 'react-router-dom';
+import { Plus, BookOpen, Search, Filter, ArrowLeft, Users, Settings } from 'lucide-react';
+import { AddWordModal } from '../components/AddWordModal';
+import { WordCard } from '../components/WordCard';
+import { StudyMode } from '../components/StudyMode';
+import { Notification } from '../components/Notification';
+import { Navigation } from '../components/Navigation';
+import { useAuth } from '../hooks/useAuth';
+import { useDecks } from '../hooks/useDecks';
+import { useWordsAPI } from '../hooks/useWordsAPI';
+import { Word, WordFormData } from '../types';
 
-function App() {
+export default function DeckDetail() {
+  const { deckId } = useParams<{ deckId: string }>();
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
+  
+  const {
+    getDeckById,
+    updateDeckWordCount,
+  } = useDecks();
+  
   const {
     words,
-    loading,
-    error,
+    loading: wordsLoading,
+    error: wordsError,
     createWord,
     updateWord,
     deleteWord,
     markAsReviewed,
-    clearError,
+    loadWordsByDeck,
+    clearError: clearWordsError,
   } = useWordsAPI();
 
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  // State
+  const [deck, setDeck] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [isAddWordModalOpen, setIsAddWordModalOpen] = useState(false);
   const [isStudyMode, setIsStudyMode] = useState(false);
+  const [editingWord, setEditingWord] = useState<Word | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterDifficulty, setFilterDifficulty] = useState<string>('all');
-  const [editingWord, setEditingWord] = useState<Word | null>(null);
   const [successMessage, setSuccessMessage] = useState<string>('');
+
+  // Carregar deck e palavras
+  useEffect(() => {
+    const loadDeckData = async () => {
+      if (!deckId) return;
+      
+      setLoading(true);
+      try {
+        const deckData = await getDeckById(deckId);
+        if (deckData) {
+          setDeck(deckData);
+          await loadWordsByDeck(deckId);
+        } else {
+          navigate('/decks');
+        }
+      } catch (error) {
+        console.error('Erro ao carregar deck:', error);
+        navigate('/decks');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadDeckData();
+  }, [deckId, getDeckById, loadWordsByDeck, navigate]);
 
   // Limpar mensagem de sucesso após 3 segundos
   useEffect(() => {
@@ -37,12 +78,14 @@ function App() {
 
   // CREATE - Adicionar nova palavra
   const handleAddWord = async (wordData: WordFormData) => {
+    if (!deckId) return;
+
     try {
       await createWord(wordData);
+      await updateDeckWordCount(deckId);
       setSuccessMessage('Palavra criada com sucesso! 🎉');
-      setIsAddModalOpen(false);
+      setIsAddWordModalOpen(false);
     } catch (error) {
-      // Erro já é gerenciado pelo hook
       console.error('Erro ao criar palavra:', error);
     }
   };
@@ -50,17 +93,20 @@ function App() {
   // UPDATE - Editar palavra
   const handleEditWord = (word: Word) => {
     setEditingWord(word);
-    setIsAddModalOpen(true);
+    setIsAddWordModalOpen(true);
   };
 
-  // UPDATE - Atualizar palavra (quando modal é fechado com dados)
+  // UPDATE - Atualizar palavra
   const handleUpdateWord = async (wordData: WordFormData) => {
     if (!editingWord) return;
 
     try {
       await updateWord(editingWord.id, wordData);
+      if (deckId) {
+        await updateDeckWordCount(deckId);
+      }
       setSuccessMessage('Palavra atualizada com sucesso! ✨');
-      setIsAddModalOpen(false);
+      setIsAddWordModalOpen(false);
       setEditingWord(null);
     } catch (error) {
       console.error('Erro ao atualizar palavra:', error);
@@ -69,9 +115,12 @@ function App() {
 
   // DELETE - Deletar palavra
   const handleDeleteWord = async (id: string) => {
-    if (window.confirm('Are you sure you want to delete this word?')) {
+    if (window.confirm('Tem certeza que deseja deletar esta palavra?')) {
       try {
         await deleteWord(id);
+        if (deckId) {
+          await updateDeckWordCount(deckId);
+        }
         setSuccessMessage('Palavra deletada com sucesso! 🗑️');
       } catch (error) {
         console.error('Erro ao deletar palavra:', error);
@@ -92,6 +141,10 @@ function App() {
       const promises = words.map(word => markAsReviewed(word.id));
       await Promise.all(promises);
       
+      if (deckId) {
+        await updateDeckWordCount(deckId);
+      }
+      
       setSuccessMessage(`Missão completada! ${correctAnswers}/${totalQuestions} acertos! 🏆`);
       setIsStudyMode(false);
     } catch (error) {
@@ -99,13 +152,24 @@ function App() {
     }
   };
 
-  // Filtrar palavras localmente (pode ser substituído por busca na API)
+  // Filtrar palavras
   const filteredWords = words.filter(word => {
     const matchesSearch = word.english.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          word.portuguese.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesDifficulty = filterDifficulty === 'all' || word.difficulty === filterDifficulty;
     return matchesSearch && matchesDifficulty;
   });
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-dark-950 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-6xl mb-4 animate-pulse">✨</div>
+          <p className="text-dark-100">Loading deck...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (isStudyMode) {
     return (
@@ -120,13 +184,13 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-dark-950">
+    <div className="min-h-screen flex flex-col bg-dark-950 pb-20">
       {/* Notifications */}
       <Notification
         type="error"
-        message={error || ''}
-        onClose={clearError}
-        show={!!error}
+        message={wordsError || ''}
+        onClose={clearWordsError}
+        show={!!wordsError}
       />
       
       <Notification
@@ -139,7 +203,7 @@ function App() {
       <Notification
         type="loading"
         message="Loading..."
-        show={loading}
+        show={wordsLoading}
       />
 
       {/* Header */}
@@ -147,28 +211,44 @@ function App() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col lg:flex-row justify-between items-center gap-8">
             <div className="text-center lg:text-left">
-              <h1 className="modern-title text-4xl sm:text-5xl lg:text-6xl mb-4">
-                Word<span className="text-neon-500">In</span>
-              </h1>
-              <p className="text-dark-100 font-body text-lg lg:text-xl">
-                Your gateway to vocabulary mastery
-              </p>
+              <div className="flex items-center gap-4 mb-4">
+                <button
+                  onClick={() => navigate('/decks')}
+                  className="text-dark-200 hover:text-white transition-colors"
+                >
+                  <ArrowLeft size={24} />
+                </button>
+                <h1 className="modern-title text-4xl sm:text-5xl lg:text-6xl">
+                  {deck?.name}
+                </h1>
+              </div>
+              {deck?.description && (
+                <p className="text-dark-100 font-body text-lg lg:text-xl mb-4">
+                  {deck.description}
+                </p>
+              )}
+              {user && (
+                <div className="flex items-center gap-3">
+                  <Users className="text-neon-500" size={20} />
+                  <span className="text-dark-100">{user.name}</span>
+                </div>
+              )}
             </div>
             <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
               <button
                 onClick={() => setIsStudyMode(true)}
-                disabled={words.length === 0 || loading}
+                disabled={words.length === 0 || wordsLoading}
                 className="modern-button primary w-full sm:w-auto px-8 py-4 text-lg"
               >
                 <BookOpen size={24} />
-                <span>Begin Journey</span>
+                <span>Study Deck</span>
                 <span className="bg-dark-800/50 px-3 py-1.5 rounded-lg text-sm font-bold text-neon-500">
                   {words.length}
                 </span>
               </button>
               <button
-                onClick={() => setIsAddModalOpen(true)}
-                disabled={loading}
+                onClick={() => setIsAddWordModalOpen(true)}
+                disabled={wordsLoading}
                 className="modern-button w-full sm:w-auto px-8 py-4 text-lg"
               >
                 <Plus size={24} />
@@ -187,7 +267,7 @@ function App() {
             <div className="grid lg:grid-cols-4 gap-6">
               <div className="lg:col-span-3">
                 <label htmlFor="search" className="block text-dark-100 font-ui text-sm mb-2 ml-1">
-                  Search Words
+                  Search Words in "{deck?.name}"
                 </label>
                 <div className="relative">
                   <Search className="absolute left-5 top-1/2 transform -translate-y-1/2 text-dark-200" size={20} />
@@ -197,7 +277,7 @@ function App() {
                     placeholder="Type to search for words..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    disabled={loading}
+                    disabled={wordsLoading}
                     className="modern-input w-full pl-14 pr-5 py-5 font-ui text-lg"
                   />
                 </div>
@@ -212,7 +292,7 @@ function App() {
                     id="difficulty"
                     value={filterDifficulty}
                     onChange={(e) => setFilterDifficulty(e.target.value)}
-                    disabled={loading}
+                    disabled={wordsLoading}
                     className="modern-input flex-1 px-5 py-5 font-ui text-lg appearance-none"
                   >
                     <option value="all">All Levels</option>
@@ -257,19 +337,19 @@ function App() {
               <div className="mb-12">
                 <div className="text-9xl mb-8 animate-float">✨</div>
                 <h3 className="text-3xl sm:text-4xl font-display font-bold text-neon-500 mb-6">
-                  {words.length === 0 ? 'Begin Your Journey' : 'No Words Found'}
+                  {words.length === 0 ? 'Add Your First Word' : 'No Words Found'}
                 </h3>
                 <p className="text-dark-100 mb-12 max-w-lg mx-auto text-xl font-body leading-relaxed">
                   {words.length === 0 
-                    ? 'Start building your vocabulary by adding your first word.'
+                    ? `Start building your vocabulary in "${deck?.name}" by adding your first word.`
                     : 'Adjust your search criteria to discover more words.'
                   }
                 </p>
               </div>
               {words.length === 0 && (
                 <button
-                  onClick={() => setIsAddModalOpen(true)}
-                  disabled={loading}
+                  onClick={() => setIsAddWordModalOpen(true)}
+                  disabled={wordsLoading}
                   className="modern-button primary px-10 py-5 text-xl"
                 >
                   <Plus size={28} className="mr-3" />
@@ -300,14 +380,21 @@ function App() {
 
       {/* Add/Edit Word Modal */}
       <AddWordModal
-        isOpen={isAddModalOpen}
-        onClose={() => setIsAddModalOpen(false)}
+        isOpen={isAddWordModalOpen}
+        onClose={() => {
+          setIsAddWordModalOpen(false);
+          setEditingWord(null);
+        }}
         onAdd={handleAddWord}
         onUpdate={handleUpdateWord}
         editingWord={editingWord}
+        decks={deck ? [deck] : []}
+        selectedDeckId={deckId}
+        onDeckChange={() => {}}
       />
+
+      {/* Navigation */}
+      <Navigation />
     </div>
   );
-}
-
-export default App; 
+} 

@@ -1,208 +1,205 @@
-import { useState } from 'react';
-import { X, Plus, Upload, Mic, Sparkles } from 'lucide-react';
-import { WordFormData } from '../types';
+import { useState, useEffect } from 'react';
+import { X, Plus, Sparkles, Edit, Type, Languages, BarChart3, Folder } from 'lucide-react';
+import { WordFormData, Word, Deck } from '../types';
+import { Input } from './Input';
 
 interface AddWordModalProps {
   isOpen: boolean;
   onClose: () => void;
   onAdd: (word: WordFormData) => void;
+  onUpdate?: (word: WordFormData) => void;
+  editingWord?: Word | null;
+  decks: Deck[];
+  selectedDeckId?: string;
+  onDeckChange?: (deckId: string) => void;
 }
 
-export function AddWordModal({ isOpen, onClose, onAdd }: AddWordModalProps) {
+export function AddWordModal({ 
+  isOpen, 
+  onClose, 
+  onAdd, 
+  onUpdate, 
+  editingWord, 
+  decks,
+  selectedDeckId,
+  onDeckChange
+}: AddWordModalProps) {
   const [formData, setFormData] = useState<WordFormData>({
     english: '',
     portuguese: '',
-    pronunciation: '',
     difficulty: 'medium',
+    deckId: selectedDeckId || '',
   });
+
+  // Preencher formulário quando estiver editando
+  useEffect(() => {
+    if (editingWord) {
+      setFormData({
+        english: editingWord.english,
+        portuguese: editingWord.portuguese,
+        difficulty: editingWord.difficulty,
+        notes: editingWord.notes,
+        deckId: editingWord.deckId,
+      });
+    } else {
+      // Resetar formulário quando não estiver editando
+      setFormData({
+        english: '',
+        portuguese: '',
+        difficulty: 'medium',
+        deckId: selectedDeckId || '',
+      });
+    }
+  }, [editingWord, isOpen, selectedDeckId]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onAdd(formData);
+    
+    if (!formData.deckId) {
+      alert('Por favor, selecione um deck');
+      return;
+    }
+    
+    if (editingWord && onUpdate) {
+      onUpdate(formData);
+    } else {
+      onAdd(formData);
+    }
+    
+    // Resetar formulário
     setFormData({
       english: '',
       portuguese: '',
-      pronunciation: '',
       difficulty: 'medium',
+      deckId: selectedDeckId || '',
     });
-    onClose();
   };
 
-  const handleFileChange = (field: 'audioFile' | 'imageFile') => (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setFormData(prev => ({ ...prev, [field]: file }));
-    }
+  const handleDeckChange = (deckId: string) => {
+    setFormData(prev => ({ ...prev, deckId }));
+    onDeckChange?.(deckId);
   };
+
+  const isEditing = !!editingWord;
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4">
-      <div className="gamified-card rounded-2xl p-4 sm:p-6 lg:p-8 w-full max-w-md lg:max-w-lg mx-auto shadow-2xl border-2 border-green-300 max-h-[90vh] overflow-y-auto">
-        <div className="flex justify-between items-center mb-6 sm:mb-8">
-          <div className="flex items-center gap-2 sm:gap-3">
-            <Sparkles className="text-green-500" size={24} />
-            <h2 className="text-xl sm:text-2xl font-bold text-gray-800">✨ New Magic Word</h2>
+    <div className="fixed inset-0 bg-dark-950/90 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-dark-900 border border-dark-700 rounded-2xl w-full max-w-lg mx-auto overflow-y-auto max-h-[90vh] shadow-xl shadow-dark-950/50">
+        <div className="p-6 sm:p-8">
+          <div className="flex justify-between items-center mb-8">
+            <div className="flex items-center gap-3">
+              {isEditing ? (
+                <Edit className="text-neon-500" size={24} />
+              ) : (
+                <Plus className="text-neon-500" size={24} />
+              )}
+              <h2 className="text-2xl sm:text-3xl font-display font-bold text-white">
+                {isEditing ? 'Edit Word' : 'Add New Word'}
+              </h2>
+            </div>
+            <button
+              onClick={onClose}
+              className="text-dark-200 hover:text-white transition-colors duration-200"
+            >
+              <X size={24} />
+            </button>
           </div>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors duration-200 p-2 hover:bg-gray-100 rounded-lg"
-          >
-            <X size={20} />
-          </button>
-        </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2 sm:mb-3">
-              🎯 English Word *
-            </label>
-            <input
-              type="text"
-              required
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Seleção de Deck */}
+            <div>
+              <label className="block text-sm font-ui font-medium text-dark-100 mb-2 ml-1">
+                Select Deck
+              </label>
+              <div className="relative">
+                <Folder className="absolute left-4 top-1/2 transform -translate-y-1/2 text-dark-200" size={20} />
+                <select
+                  name="deckId"
+                  value={formData.deckId}
+                  onChange={(e) => handleDeckChange(e.target.value)}
+                  required
+                  className="modern-input w-full font-ui text-base pl-12 pr-4 py-3 bg-dark-800 border border-dark-600 focus:border-neon-500/50 focus:ring-2 focus:ring-neon-500/20"
+                >
+                  <option value="">Select a deck</option>
+                  {decks.map(deck => (
+                    <option key={deck.id} value={deck.id}>
+                      {deck.name} ({deck.wordCount} words)
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <Input
+              label="English Word"
+              name="english"
               value={formData.english}
               onChange={(e) => setFormData(prev => ({ ...prev, english: e.target.value }))}
-              className="w-full px-3 sm:px-4 py-3 sm:py-4 bg-white/90 border-2 border-green-300 rounded-xl focus:outline-none focus:ring-4 focus:ring-green-300 focus:border-green-500 text-gray-800 placeholder-gray-600 font-medium shadow-lg"
-              placeholder="Ex: Hello"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2 sm:mb-3">
-              🇧🇷 Portuguese Translation *
-            </label>
-            <input
-              type="text"
               required
+              placeholder="Enter word in English"
+              icon={Type}
+            />
+
+            <Input
+              label="Portuguese Translation"
+              name="portuguese"
               value={formData.portuguese}
               onChange={(e) => setFormData(prev => ({ ...prev, portuguese: e.target.value }))}
-              className="w-full px-3 sm:px-4 py-3 sm:py-4 bg-white/90 border-2 border-green-300 rounded-xl focus:outline-none focus:ring-4 focus:ring-green-300 focus:border-green-500 text-gray-800 placeholder-gray-600 font-medium shadow-lg"
-              placeholder="Ex: Olá"
+              required
+              placeholder="Enter translation in Portuguese"
+              icon={Languages}
             />
-          </div>
 
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2 sm:mb-3">
-              🔊 Pronunciation
-            </label>
-            <div className="flex gap-2 sm:gap-3">
-              <input
-                type="text"
-                value={formData.pronunciation}
-                onChange={(e) => setFormData(prev => ({ ...prev, pronunciation: e.target.value }))}
-                className="flex-1 px-3 sm:px-4 py-3 sm:py-4 bg-white/90 border-2 border-green-300 rounded-xl focus:outline-none focus:ring-4 focus:ring-green-300 focus:border-green-500 text-gray-800 placeholder-gray-600 font-medium shadow-lg"
-                placeholder="Ex: /həˈloʊ/"
-              />
+            <div>
+              <label className="block text-sm font-ui font-medium text-dark-100 mb-2 ml-1">
+                Difficulty Level
+              </label>
+              <div className="relative">
+                <BarChart3 className="absolute left-4 top-1/2 transform -translate-y-1/2 text-dark-200" size={20} />
+                <select
+                  name="difficulty"
+                  value={formData.difficulty}
+                  onChange={(e) => setFormData(prev => ({ ...prev, difficulty: e.target.value as any }))}
+                  required
+                  className="modern-input w-full font-ui text-base pl-12 pr-4 py-3 bg-dark-800 border border-dark-600 focus:border-neon-500/50 focus:ring-2 focus:ring-neon-500/20"
+                >
+                  <option value="">Select difficulty</option>
+                  <option value="easy">Beginner</option>
+                  <option value="medium">Intermediate</option>
+                  <option value="hard">Advanced</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex gap-4 pt-6">
               <button
                 type="button"
-                className="px-3 sm:px-4 py-3 sm:py-4 bg-green-100 hover:bg-green-200 border-2 border-green-300 rounded-xl transition-colors duration-200"
-                title="Record audio"
+                onClick={onClose}
+                className="flex-1 px-6 py-3 bg-dark-800 hover:bg-dark-700 text-white rounded-xl font-ui transition-all duration-300 border border-dark-600 hover:border-dark-500"
               >
-                <Mic size={18} className="text-green-600" />
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="flex-1 px-6 py-3 bg-neon-500 hover:bg-neon-400 text-dark-950 font-semibold rounded-xl font-ui transition-all duration-300 flex items-center justify-center gap-2 shadow-lg shadow-neon-500/25 hover:shadow-neon-500/40"
+              >
+                {isEditing ? (
+                  <>
+                    <Edit size={20} />
+                    Update Word
+                  </>
+                ) : (
+                  <>
+                    <Plus size={20} />
+                    Add Word
+                  </>
+                )}
               </button>
             </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2 sm:mb-3">
-              ⚡ Difficulty
-            </label>
-            <select
-              value={formData.difficulty}
-              onChange={(e) => setFormData(prev => ({ ...prev, difficulty: e.target.value as any }))}
-              className="w-full px-3 sm:px-4 py-3 sm:py-4 bg-white/90 border-2 border-green-300 rounded-xl focus:outline-none focus:ring-4 focus:ring-green-300 focus:border-green-500 text-gray-800 font-medium shadow-lg"
-            >
-              <option value="easy">🟢 Easy</option>
-              <option value="medium">🟡 Medium</option>
-              <option value="hard">🔴 Hard</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2 sm:mb-3">
-              🎵 Audio (optional)
-            </label>
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3">
-              <input
-                type="file"
-                accept="audio/*"
-                onChange={handleFileChange('audioFile')}
-                className="hidden"
-                id="audio-file"
-              />
-              <label
-                htmlFor="audio-file"
-                className="flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-3 sm:py-4 bg-white/90 border-2 border-green-300 rounded-xl cursor-pointer hover:bg-white transition-colors duration-200 text-gray-700 font-medium shadow-lg w-full sm:w-auto justify-center"
-              >
-                <Upload size={18} className="text-green-600" />
-                Choose file
-              </label>
-              {formData.audioFile && (
-                <span className="text-sm text-green-600 font-medium bg-green-100 px-2 sm:px-3 py-1 sm:py-2 rounded-lg break-all">
-                  {formData.audioFile.name}
-                </span>
-              )}
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2 sm:mb-3">
-              🖼️ Image (optional)
-            </label>
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3">
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleFileChange('imageFile')}
-                className="hidden"
-                id="image-file"
-              />
-              <label
-                htmlFor="image-file"
-                className="flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-3 sm:py-4 bg-white/90 border-2 border-green-300 rounded-xl cursor-pointer hover:bg-white transition-colors duration-200 text-gray-700 font-medium shadow-lg w-full sm:w-auto justify-center"
-              >
-                <Upload size={18} className="text-green-600" />
-                Choose image
-              </label>
-              {formData.imageFile && (
-                <span className="text-sm text-green-600 font-medium bg-green-100 px-2 sm:px-3 py-1 sm:py-2 rounded-lg break-all">
-                  {formData.imageFile.name}
-                </span>
-              )}
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2 sm:mb-3">
-              📝 Notes (optional)
-            </label>
-            <textarea
-              value={formData.notes || ''}
-              onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-              rows={3}
-              className="w-full px-3 sm:px-4 py-3 sm:py-4 bg-white/90 border-2 border-green-300 rounded-xl focus:outline-none focus:ring-4 focus:ring-green-300 focus:border-green-500 text-gray-800 placeholder-gray-600 font-medium shadow-lg resize-none"
-              placeholder="Ex: Used in informal greetings"
-            />
-          </div>
-
-          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 pt-4 sm:pt-6">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 px-4 sm:px-6 py-3 sm:py-4 bg-gray-100 hover:bg-gray-200 border-2 border-gray-300 rounded-xl text-gray-700 transition-colors duration-200 font-semibold"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="gamified-button flex-1 px-4 sm:px-6 py-3 sm:py-4 rounded-xl flex items-center justify-center gap-2 sm:gap-3 text-base sm:text-lg"
-            >
-              <Plus size={18} />
-              ADD WORD
-            </button>
-          </div>
-        </form>
+          </form>
+        </div>
       </div>
     </div>
   );
